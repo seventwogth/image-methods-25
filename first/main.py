@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from math import sqrt
 from typing import Iterable
@@ -127,6 +128,22 @@ def print_table(x_values: list[float], y_values: list[float], table: list[list[C
         print(" | ".join(f"{item:>20}" for item in values))
 
 
+def save_table_to_csv(
+    output_path: str,
+    title: str,
+    x_values: list[float],
+    y_values: list[float],
+    table: list[list[Color]],
+) -> None:
+    with open(output_path, "w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.writer(csv_file, delimiter=";")
+        writer.writerow([title])
+        writer.writerow(["y\\x", *[f"{x:.2f}" for x in x_values]])
+
+        for y, row in zip(y_values, table):
+            writer.writerow([f"{y:.2f}", *[format_color(color) for color in row]])
+
+
 def main() -> None:
     light = LightSource(
         intensity_rgb=(1200.0, 900.0, 700.0),
@@ -147,6 +164,13 @@ def main() -> None:
 
     print("Вычисленные значения цветной освещенности E(RGB, P_T):")
     print_table(x_values, y_values, table)
+    save_table_to_csv(
+        output_path="first/illuminance_table.csv",
+        title="E(RGB, P_T) для точек, заданных локальными координатами",
+        x_values=x_values,
+        y_values=y_values,
+        table=table,
+    )
 
 
 if __name__ == "__main__":
