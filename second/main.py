@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from math import pi, sqrt
 from typing import Iterable
@@ -160,6 +161,22 @@ def print_table(title: str, x_values: list[float], y_values: list[float], table:
         print(" | ".join(f"{v:>20}" for v in values))
 
 
+def save_table_to_csv(
+    output_path: str,
+    title: str,
+    x_values: list[float],
+    y_values: list[float],
+    table: list[list[Color]],
+) -> None:
+    with open(output_path, "w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.writer(csv_file, delimiter=";")
+        writer.writerow([title])
+        writer.writerow(["y\\x", *[f"{x:.2f}" for x in x_values]])
+
+        for y, row in zip(y_values, table):
+            writer.writerow([f"{y:.2f}", *[format_color(color) for color in row]])
+
+
 def main() -> None:
     # Два источника света из задания ЛР2
     lights = [
@@ -216,6 +233,28 @@ def main() -> None:
     print_table("E1(RGB, P_T) для первого источника:", x_values, y_values, e1_table)
     print_table("E2(RGB, P_T) для второго источника:", x_values, y_values, e2_table)
     print_table("L(RGB, P_T, v) с учетом BRDF:", x_values, y_values, l_table)
+
+    save_table_to_csv(
+        output_path="second/e1_table.csv",
+        title="E1(RGB, P_T) для первого источника",
+        x_values=x_values,
+        y_values=y_values,
+        table=e1_table,
+    )
+    save_table_to_csv(
+        output_path="second/e2_table.csv",
+        title="E2(RGB, P_T) для второго источника",
+        x_values=x_values,
+        y_values=y_values,
+        table=e2_table,
+    )
+    save_table_to_csv(
+        output_path="second/l_table.csv",
+        title="L(RGB, P_T, v) с учетом BRDF",
+        x_values=x_values,
+        y_values=y_values,
+        table=l_table,
+    )
 
 
 if __name__ == "__main__":
