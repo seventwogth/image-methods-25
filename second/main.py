@@ -83,7 +83,7 @@ def normalize(v: Vector) -> Vector:
 
 
 def clamp_nonnegative(x: float) -> float:
-    return max(0.0, x)
+    return abs(x);
 
 
 def add_colors(a: Color, b: Color) -> Color:
@@ -153,11 +153,11 @@ def brightness_at_point(
     material: Material,
     plane: TrianglePlane,
     point: Vector,
-    view_direction: Vector,
+    observer_position: Vector,
 ) -> tuple[tuple[Color, ...], Color]:
     """Возвращает освещённости от всех источников и итоговую яркость L(RGB, P_T, v)."""
     n = plane_normal(plane)
-    v = normalize(view_direction)
+    v = normalize(sub(observer_position, point))
 
     e_values: list[Color] = []
     l_rgb = [0.0, 0.0, 0.0]
@@ -187,7 +187,7 @@ def build_point_samples(
     lights: list[LightSource],
     material: Material,
     plane: TrianglePlane,
-    view_direction: Vector,
+    observer_position: Vector,
     x_values: list[float],
     y_values: list[float],
 ) -> list[PointSample]:
@@ -197,7 +197,7 @@ def build_point_samples(
     for y in y_values:
         for x in x_values:
             point = to_global_point(plane, x, y)
-            illuminance_by_light, brightness = brightness_at_point(lights, material, plane, point, view_direction)
+            illuminance_by_light, brightness = brightness_at_point(lights, material, plane, point, observer_position)
             samples.append(
                 PointSample(
                     point_id=f"P{point_index:02d}",
@@ -376,14 +376,14 @@ def main() -> None:
     lights = [
         LightSource(
             name="L1",
-            intensity_rgb=(1400.0, 1200.0, 1000.0),
-            axis=(0.4, -0.8, -0.4),
-            position=(1.0, 6.0, 5.0),
+            intensity_rgb=(1000.0, 1000.0, 1000.0),
+            axis=(0.0, 0.0, -1.0),
+            position=(0.0, 0.0, 4.0),
         ),
         LightSource(
             name="L2",
             intensity_rgb=(900.0, 1100.0, 1300.0),
-            axis=(0.2, -1.0, -0.2),
+            axis=(0.0, 0.0, 1.0),
             position=(-1.0, 4.5, 3.8),
         ),
     ]
@@ -401,12 +401,12 @@ def main() -> None:
         ke=18.0,
     )
 
-    view_direction = (2.0, 2.0, 3.0)
+    observer_position = (2.0, 2.0, 3.0)
 
     x_values = [0.0, 0.5, 1.0, 1.5, 2.0]
     y_values = [0.0, 0.4, 0.8, 1.2, 1.6]
 
-    samples = build_point_samples(lights, material, plane, view_direction, x_values, y_values)
+    samples = build_point_samples(lights, material, plane, observer_position, x_values, y_values)
 
     print_rows_table(
         "Точки в глобальных координатах:",
