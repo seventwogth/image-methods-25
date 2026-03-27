@@ -83,7 +83,7 @@ def normalize(v: Vector) -> Vector:
 
 
 def clamp_nonnegative(x: float) -> float:
-    return abs(x);
+    return max(x, 0.0);
 
 
 def add_colors(a: Color, b: Color) -> Color:
@@ -158,6 +158,7 @@ def brightness_at_point(
     """Возвращает освещённости от всех источников и итоговую яркость L(RGB, P_T, v)."""
     n = plane_normal(plane)
     v = normalize(sub(observer_position, point))
+    n_dot_v = dot(n, v)
 
     e_values: list[Color] = []
     l_rgb = [0.0, 0.0, 0.0]
@@ -167,6 +168,9 @@ def brightness_at_point(
         e_values.append(e_i)
 
         s_to_light = sub(light.position, point)
+        l = normalize(s_to_light)
+        if dot(n, l) <= 0.0 or n_dot_v <= 0.0:
+            continue
         f_rgb = brdf(material, n, v, s_to_light)
 
         for idx in range(3):
