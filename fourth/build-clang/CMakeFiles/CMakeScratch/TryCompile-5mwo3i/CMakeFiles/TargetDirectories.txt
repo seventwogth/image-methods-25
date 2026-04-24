@@ -1,0 +1,3 @@
+C:/Users/stargazer/github/image-methods-25/fourth/build-clang/CMakeFiles/CMakeScratch/TryCompile-5mwo3i/CMakeFiles/cmTC_51bdb.dir
+C:/Users/stargazer/github/image-methods-25/fourth/build-clang/CMakeFiles/CMakeScratch/TryCompile-5mwo3i/CMakeFiles/edit_cache.dir
+C:/Users/stargazer/github/image-methods-25/fourth/build-clang/CMakeFiles/CMakeScratch/TryCompile-5mwo3i/CMakeFiles/rebuild_cache.dir

@@ -1,6 +1,10 @@
 #include "scene.hpp"
 
+#include "obj_loader.hpp"
+
+#include <filesystem>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 namespace {
@@ -39,6 +43,54 @@ TriangleMesh makeQuadMesh(
     mesh.vertices = {v0, v1, v2, v3};
     mesh.indices = {t0, t1};
     return mesh;
+}
+
+bool contains(std::string_view text, std::string_view needle) {
+    return text.find(needle) != std::string_view::npos;
+}
+
+Material makeMaterialForObject(const std::string& name) {
+    if (name == "Plane") {
+        return Material{
+            "plane_matte_gray",
+            Vec3(0.88, 0.88, 0.90),
+            Vec3(0.18, 0.18, 0.18),
+            0.90,
+            0.05,
+            12.0
+        };
+    }
+
+    if (name == "Sphere.001") {
+        return Material{
+            "sphere_colored",
+            Vec3(0.32, 0.54, 0.86),
+            Vec3(0.70, 0.76, 0.92),
+            0.75,
+            0.25,
+            40.0
+        };
+    }
+
+    if (name == "Sphere" || contains(name, "Sphere")) {
+        return Material{
+            "sphere_reflective",
+            Vec3(0.60, 0.60, 0.64),
+            Vec3(0.98, 0.98, 0.98),
+            0.60,
+            0.40,
+            96.0
+        };
+    }
+
+    return Material{
+        name.empty() ? "default_material" : name + "_material",
+        Vec3(0.72, 0.72, 0.76),
+        Vec3(0.20, 0.20, 0.22),
+        0.85,
+        0.15,
+        18.0
+    };
 }
 
 } // namespace
@@ -352,6 +404,36 @@ SceneData createDefaultScene() {
         {0, 2, 3}
     };
     scene.meshes.push_back(pyramid);
+
+    return scene;
+}
+
+SceneData createSceneFromObj(const std::filesystem::path& path) {
+    const std::vector<ObjMesh> objMeshes = loadObj(path);
+
+    SceneData scene;
+    scene.camera.position = Vec3(0.0, 2.2, 6.5);
+    scene.camera.target = Vec3(0.8, 0.9, -0.8);
+    scene.camera.up = Vec3(0.0, 1.0, 0.0);
+    scene.camera.fovYDegrees = 45.0;
+    scene.camera.width = 640;
+    scene.camera.height = 640;
+    scene.backgroundColor = Vec3(0.02, 0.03, 0.05);
+
+    scene.lights = {
+        PointLight{"L1_warm", Vec3(-3.0, 5.0, 3.5), Vec3(180.0, 150.0, 120.0)},
+        PointLight{"L2_cool", Vec3(4.0, 3.0, -2.0), Vec3(70.0, 90.0, 140.0)}
+    };
+
+    scene.meshes.reserve(objMeshes.size());
+    for (const ObjMesh& objMesh : objMeshes) {
+        TriangleMesh mesh;
+        mesh.name = objMesh.name.empty() ? "unnamed_object" : objMesh.name;
+        mesh.material = makeMaterialForObject(mesh.name);
+        mesh.vertices = objMesh.vertices;
+        mesh.indices = objMesh.indices;
+        scene.meshes.push_back(std::move(mesh));
+    }
 
     return scene;
 }

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <string>
 #include <vector>
@@ -99,3 +100,4 @@ private:
 };
 
 SceneData createDefaultScene();
+SceneData createSceneFromObj(const std::filesystem::path& path);

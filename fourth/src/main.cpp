@@ -138,6 +138,7 @@ std::vector<std::vector<std::string>> buildTriangleRows(const std::vector<Triang
 
             rows.push_back({
                 mesh.name,
+                mesh.name,
                 std::to_string(triangleIndex),
                 mesh.material.name,
                 formatNumber(a.x),
@@ -208,8 +209,17 @@ int main() {
 
     try {
         const std::filesystem::path outputDir = std::filesystem::path(FOURTH_OUTPUT_DIR);
+        const std::filesystem::path repoDir = outputDir.parent_path().parent_path();
+        const std::filesystem::path objScenePath = repoDir / "obj" / "scene.obj";
+        bool useObjScene = true;
 
-        SceneData scene = createDefaultScene();
+        SceneData scene;
+        if (useObjScene) {
+            scene = createSceneFromObj(objScenePath);
+        } else {
+            scene = createDefaultScene();
+        }
+
         RenderSettings settings;
         settings.width = scene.camera.width;
         settings.height = scene.camera.height;
@@ -240,7 +250,7 @@ int main() {
             "intensity_r", "intensity_g", "intensity_b"
         };
         const std::vector<std::string> triangleHeaders = {
-            "mesh_name", "triangle_index", "material_name",
+            "mesh_name", "object_name", "triangle_index", "material_name",
             "v0_x", "v0_y", "v0_z",
             "v1_x", "v1_y", "v1_z",
             "v2_x", "v2_y", "v2_z",

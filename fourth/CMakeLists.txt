@@ -61,6 +61,7 @@ endif()
 add_executable(
     fourth_lab
     src/main.cpp
+    src/obj_loader.cpp
     src/scene.cpp
     src/renderer.cpp
     src/image.cpp
