@@ -49,6 +49,11 @@ def compute_brightness(
     incident_direction = (point - light.position).normalize()
     reflection_direction = reflect(incident_direction, normal)
 
+    # The surface is treated as one-sided: no contribution is visible
+    # when either the light or the observer is on the back side.
+    if normal.dot(light_direction) <= 0.0 or normal.dot(view_direction) <= 0.0:
+        return Vec3(0.0, 0.0, 0.0)
+
     diffuse_factor = clamp_nonnegative(normal.dot(light_direction))
     diffuse = light.intensity.component_mul(material.diffuse_color) * (
         material.kd * diffuse_factor

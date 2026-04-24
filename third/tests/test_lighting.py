@@ -107,6 +107,24 @@ class LightingReflectionTests(unittest.TestCase):
         self.assertGreater(near_highlight.y, far_from_highlight.y)
         self.assertGreater(near_highlight.z, far_from_highlight.z)
 
+    def test_brightness_is_zero_for_back_side_observer(self) -> None:
+        brightness = compute_brightness(
+            surface_point=SurfacePoint(position=Vec3(0.0, 0.0, 0.0), normal=Vec3(0.0, 0.0, 1.0)),
+            material=Material(
+                diffuse_color=Vec3(0.7, 0.6, 0.5),
+                specular_color=Vec3(1.0, 1.0, 1.0),
+                kd=0.6,
+                ks=0.8,
+                shininess=16.0,
+            ),
+            light=LightSource(position=Vec3(0.0, 0.0, 2.0), intensity=Vec3(1.0, 1.0, 1.0)),
+            observer_position=Vec3(0.0, 0.0, -3.0),
+        )
+
+        self.assertAlmostEqual(brightness.x, 0.0)
+        self.assertAlmostEqual(brightness.y, 0.0)
+        self.assertAlmostEqual(brightness.z, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
