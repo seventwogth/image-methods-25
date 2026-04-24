@@ -1,0 +1,15 @@
+Input scene:
+Surface point: (0.0000, 0.0000, 0.0000)
+Normal: (0.0000, 0.0000, 1.0000)
+Light position: (2.0000, 2.0000, 3.0000)
+Light intensity RGB: (1.0000, 0.9000, 0.8000)
+Material diffuse color: (0.7000, 0.7000, 0.7000)
+Material specular color: (1.0000, 1.0000, 1.0000)
+Material coefficients: kd=0.6, ks=0.8, shininess=16.0
+
+Results:
+Observer P01 = (-3.0000, 0.0000, 2.0000) -> raw L(RGB) = (0.3316, 0.2984, 0.2653) -> normalized L(RGB) = (1.0000, 0.9000, 0.8000)
+Observer P02 = (-1.5000, 2.0000, 2.5000) -> raw L(RGB) = (0.3056, 0.2750, 0.2445) -> normalized L(RGB) = (0.9216, 0.8295, 0.7373)
+Observer P03 = (0.0000, 3.0000, 3.0000) -> raw L(RGB) = (0.3056, 0.2750, 0.2445) -> normalized L(RGB) = (0.9216, 0.8295, 0.7373)
+Observer P04 = (1.5000, 2.0000, 2.5000) -> raw L(RGB) = (0.3056, 0.2750, 0.2445) -> normalized L(RGB) = (0.9216, 0.8295, 0.7373)
+Observer P05 = (3.0000, 0.0000, 2.0000) -> raw L(RGB) = (0.3056, 0.2750, 0.2445) -> normalized L(RGB) = (0.9216, 0.8295, 0.7373)
