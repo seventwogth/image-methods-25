@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from vector import Vec3
+from vector import Vec3, cross
 
 
 @dataclass(frozen=True)
@@ -13,17 +13,27 @@ class LightSource:
 
 @dataclass(frozen=True)
 class MirrorSurface:
-    reflection_point: Vec3  # PT
-    normal: Vec3  # N_mirror
+    p1: Vec3
+    p2: Vec3
+    p3: Vec3
     ks: float
+
+    @property
+    def normal(self) -> Vec3:
+        return cross(self.p2 - self.p1, self.p3 - self.p1).normalize()
 
 
 @dataclass(frozen=True)
 class DiffuseSurface:
-    point: Vec3  # a point on diffuse plane
-    normal: Vec3
+    p1: Vec3
+    p2: Vec3
+    p3: Vec3
     color: Vec3  # K(RGB)
     kd: float
+
+    @property
+    def normal(self) -> Vec3:
+        return cross(self.p2 - self.p1, self.p3 - self.p1).normalize()
 
 
 @dataclass(frozen=True)
@@ -35,24 +45,29 @@ class SceneInput:
 
 
 def create_default_scene() -> SceneInput:
-    # Mirror on z=0, diffuse plane above it on z=2.
-    # Light arrives to mirror and reflects upward to diffuse plane.
+    mirror = MirrorSurface(
+        p1=Vec3(-2.0, -1.5, 0.0),
+        p2=Vec3(2.0, -1.5, 0.0),
+        p3=Vec3(0.0, 1.5, 0.0),
+        ks=1.0,
+    )
+
+    # p2/p3 order chosen so normal points down (negative Z).
+    diffuse = DiffuseSurface(
+        p1=Vec3(-2.5, -1.5, 2.0),
+        p2=Vec3(0.0, 2.0, 2.0),
+        p3=Vec3(2.5, -1.5, 2.0),
+        color=Vec3(0.7, 0.7, 0.7),
+        kd=1.0,
+    )
+
     return SceneInput(
         light=LightSource(
             position=Vec3(2.0, 0.0, 2.0),
             intensity=Vec3(1.0, 0.9, 0.8),
         ),
-        mirror=MirrorSurface(
-            reflection_point=Vec3(0.0, 0.0, 0.0),
-            normal=Vec3(0.0, 0.0, 1.0),
-            ks=1.0,
-        ),
-        diffuse=DiffuseSurface(
-            point=Vec3(0.0, 0.0, 2.0),
-            normal=Vec3(0.0, 0.0, -1.0),
-            color=Vec3(0.7, 0.7, 0.7),
-            kd=1.0,
-        ),
+        mirror=mirror,
+        diffuse=diffuse,
         observer_positions=[
             Vec3(-3.0, 0.0, 1.0),
             Vec3(-1.5, 2.0, 1.0),
