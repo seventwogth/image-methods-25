@@ -1,104 +1,183 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 
-from scene import LightSource, Material, SceneInput, SurfacePoint
-from vector import Vec3, Vector3, clamp_nonnegative
+from scene import DiffuseSurface, MirrorSurface, SceneInput
+from vector import Vec3, clamp_nonnegative
+
+EPS = 1e-9
 
 
 @dataclass(frozen=True)
-class BrightnessResult:
-    light_direction: Vector3
-    view_direction: Vector3
-    reflection_direction: Vector3
-    alignment: float
-    estimated_brightness: Vec3
-    note: str
+class SampleLightingResult:
+    sample_id: str
+    mirror_point: Vec3
+    incident_to_mirror: Vec3
+    reflected_from_mirror: Vec3
+    diffuse_hit_point: Vec3 | None
+    brightness: Vec3
 
 
-def reflect(incident: Vec3, normal: Vec3) -> Vec3:
-    """
-    Reflect an incident ray relative to the surface normal.
+@dataclass(frozen=True)
+class ObserverLightingResult:
+    observer_id: str
+    observer_position: Vec3
+    samples: list[SampleLightingResult]
+    average_brightness: Vec3
 
-    Formula:
-        O' = O - 2 * (O dot N) * N
-    """
+
+def reflect_from_mirror(incident: Vec3, normal: Vec3) -> Vec3:
+    """Mirror reflection: O' = O - 2 * (O · N) * N."""
     incident_unit = incident.normalize()
     normal_unit = normal.normalize()
-    reflected = incident_unit - normal_unit * (2.0 * incident_unit.dot(normal_unit))
-    return reflected.normalize()
+    return (incident_unit - 2.0 * incident_unit.dot(normal_unit) * normal_unit).normalize()
 
 
-def compute_brightness(
-    surface_point: SurfacePoint,
-    material: Material,
-    light: LightSource,
+def is_point_inside_triangle(point: Vec3, a: Vec3, b: Vec3, c: Vec3) -> bool:
+    """Check point inclusion in triangle by barycentric coordinates."""
+    v0 = b - a
+    v1 = c - a
+    v2 = point - a
+
+    d00 = v0.dot(v0)
+    d01 = v0.dot(v1)
+    d11 = v1.dot(v1)
+    d20 = v2.dot(v0)
+    d21 = v2.dot(v1)
+
+    denominator = d00 * d11 - d01 * d01
+    if abs(denominator) < EPS:
+        return False
+
+    v = (d11 * d20 - d01 * d21) / denominator
+    w = (d00 * d21 - d01 * d20) / denominator
+    u = 1.0 - v - w
+
+    return (
+        -EPS <= u <= 1.0 + EPS
+        and -EPS <= v <= 1.0 + EPS
+        and -EPS <= w <= 1.0 + EPS
+    )
+
+
+def intersect_ray_with_surface_triangle(
+    ray_origin: Vec3,
+    ray_direction: Vec3,
+    p1: Vec3,
+    p2: Vec3,
+    p3: Vec3,
+    normal: Vec3,
+) -> Vec3 | None:
+    """Intersect ray with surface plane and keep only hits inside the triangle."""
+    direction = ray_direction.normalize()
+    unit_normal = normal.normalize()
+
+    denominator = direction.dot(unit_normal)
+    if abs(denominator) < EPS:
+        return None
+
+    t = (p1 - ray_origin).dot(unit_normal) / denominator
+    if t <= EPS:
+        return None
+
+    hit = ray_origin + direction * t
+    if not is_point_inside_triangle(hit, p1, p2, p3):
+        return None
+
+    return hit
+
+
+def random_point_on_triangle(a: Vec3, b: Vec3, c: Vec3, rng: random.Random) -> Vec3:
+    """Generate uniformly distributed random point inside triangle."""
+    r1 = rng.random()
+    r2 = rng.random()
+
+    if r1 + r2 > 1.0:
+        r1 = 1.0 - r1
+        r2 = 1.0 - r2
+
+    return a + (b - a) * r1 + (c - a) * r2
+
+
+def compute_sample_brightness(
+    scene: SceneInput,
     observer_position: Vec3,
-) -> Vec3:
-    """
-    Compute RGB brightness in the surface point for one observer direction.
+    mirror_point: Vec3,
+    sample_id: str,
+) -> SampleLightingResult:
+    # 1) Build incident ray from source to random mirror point PT.
+    incident = (mirror_point - scene.light.position).normalize()
 
-    Local lighting model:
-        L = L_diffuse + L_specular
-    """
-    point = surface_point.position
-    normal = surface_point.normal.normalize()
+    # 2) Reflect from mirror using mirror normal computed from triangle points.
+    reflected = reflect_from_mirror(incident, scene.mirror.normal)
 
-    light_direction = (light.position - point).normalize()
-    view_direction = (observer_position - point).normalize()
-    incident_direction = (point - light.position).normalize()
-    reflection_direction = reflect(incident_direction, normal)
-
-    # The surface is treated as one-sided: no contribution is visible
-    # when either the light or the observer is on the back side.
-    if normal.dot(light_direction) <= 0.0 or normal.dot(view_direction) <= 0.0:
-        return Vec3(0.0, 0.0, 0.0)
-
-    diffuse_factor = clamp_nonnegative(normal.dot(light_direction))
-    diffuse = light.intensity.component_mul(material.diffuse_color) * (
-        material.kd * diffuse_factor
+    # 3) Intersect reflected ray with finite diffuse triangle.
+    hit_point = intersect_ray_with_surface_triangle(
+        ray_origin=mirror_point,
+        ray_direction=reflected,
+        p1=scene.diffuse.p1,
+        p2=scene.diffuse.p2,
+        p3=scene.diffuse.p3,
+        normal=scene.diffuse.normal,
     )
 
-    specular_factor = clamp_nonnegative(reflection_direction.dot(view_direction))
-    specular = light.intensity.component_mul(material.specular_color) * (
-        material.ks * (specular_factor ** material.shininess)
+    if hit_point is None:
+        return SampleLightingResult(
+            sample_id=sample_id,
+            mirror_point=mirror_point,
+            incident_to_mirror=incident,
+            reflected_from_mirror=reflected,
+            diffuse_hit_point=None,
+            brightness=Vec3(0.0, 0.0, 0.0),
+        )
+
+    # 4) Compute Lambert brightness toward observer from diffuse hit point.
+    mirrored_intensity = scene.light.intensity * scene.mirror.ks
+    view_direction = (observer_position - hit_point).normalize()
+    lambert_factor = clamp_nonnegative(scene.diffuse.normal.dot(view_direction))
+    brightness = mirrored_intensity.component_mul(scene.diffuse.color) * (scene.diffuse.kd * lambert_factor)
+
+    return SampleLightingResult(
+        sample_id=sample_id,
+        mirror_point=mirror_point,
+        incident_to_mirror=incident,
+        reflected_from_mirror=reflected,
+        diffuse_hit_point=hit_point,
+        brightness=brightness,
     )
 
-    return diffuse + specular
 
+def compute_observer_lighting(
+    scene: SceneInput,
+    observer_id: str,
+    observer_position: Vec3,
+    samples_per_observer: int,
+    rng: random.Random,
+) -> ObserverLightingResult:
+    sample_results: list[SampleLightingResult] = []
+    total = Vec3(0.0, 0.0, 0.0)
 
-def estimate_specular_brightness(scene: SceneInput) -> BrightnessResult:
-    """
-    Prepare intermediate values and compute brightness for the first observer.
-    """
-    if not scene.observer_positions:
-        raise ValueError("Scene must contain at least one observer position.")
+    for sample_index in range(1, samples_per_observer + 1):
+        mirror_point = random_point_on_triangle(
+            scene.mirror.p1,
+            scene.mirror.p2,
+            scene.mirror.p3,
+            rng,
+        )
+        sample = compute_sample_brightness(
+            scene=scene,
+            observer_position=observer_position,
+            mirror_point=mirror_point,
+            sample_id=f"sample_{sample_index:02d}",
+        )
+        sample_results.append(sample)
+        total = total + sample.brightness
 
-    point = scene.surface_point.position
-    normal = scene.surface_point.normal
-    observer_position = scene.observer_positions[0]
-
-    light_direction = (scene.light.position - point).normalize()
-    view_direction = (observer_position - point).normalize()
-    incident_direction = (point - scene.light.position).normalize()
-    reflection_direction = reflect(incident_direction, normal)
-
-    alignment = clamp_nonnegative(reflection_direction.dot(view_direction))
-    brightness = compute_brightness(
-        surface_point=scene.surface_point,
-        material=scene.material,
-        light=scene.light,
+    average = total / float(samples_per_observer)
+    return ObserverLightingResult(
+        observer_id=observer_id,
         observer_position=observer_position,
-    )
-
-    return BrightnessResult(
-        light_direction=light_direction,
-        view_direction=view_direction,
-        reflection_direction=reflection_direction,
-        alignment=alignment,
-        estimated_brightness=brightness,
-        note=(
-            "Brightness is computed with the local model "
-            "for the first observer from observer_positions."
-        ),
+        samples=sample_results,
+        average_brightness=average,
     )
