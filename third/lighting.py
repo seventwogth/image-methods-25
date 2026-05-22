@@ -2,103 +2,59 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from scene import LightSource, Material, SceneInput, SurfacePoint
-from vector import Vec3, Vector3, clamp_nonnegative
+from scene import DiffuseSurface, SceneInput
+from vector import Vec3, clamp_nonnegative
 
 
 @dataclass(frozen=True)
-class BrightnessResult:
-    light_direction: Vector3
-    view_direction: Vector3
-    reflection_direction: Vector3
-    alignment: float
-    estimated_brightness: Vec3
-    note: str
+class TwoStageLightingState:
+    incident_to_mirror: Vec3
+    reflected_from_mirror: Vec3
+    diffuse_hit_point: Vec3 | None
 
 
-def reflect(incident: Vec3, normal: Vec3) -> Vec3:
-    """
-    Reflect an incident ray relative to the surface normal.
-
-    Formula:
-        O' = O - 2 * (O dot N) * N
-    """
+def reflect_from_mirror(incident: Vec3, normal: Vec3) -> Vec3:
+    """Mirror reflection: O' = O - 2 * (O · N) * N."""
     incident_unit = incident.normalize()
     normal_unit = normal.normalize()
-    reflected = incident_unit - normal_unit * (2.0 * incident_unit.dot(normal_unit))
-    return reflected.normalize()
+    return (incident_unit - 2.0 * incident_unit.dot(normal_unit) * normal_unit).normalize()
 
 
-def compute_brightness(
-    surface_point: SurfacePoint,
-    material: Material,
-    light: LightSource,
-    observer_position: Vec3,
-) -> Vec3:
-    """
-    Compute RGB brightness in the surface point for one observer direction.
+def intersect_ray_with_plane(ray_origin: Vec3, ray_direction: Vec3, plane: DiffuseSurface) -> Vec3 | None:
+    """Return intersection point of ray and diffuse plane, or None if absent."""
+    direction = ray_direction.normalize()
+    plane_normal = plane.normal.normalize()
 
-    Local lighting model:
-        L = L_diffuse + L_specular
-    """
-    point = surface_point.position
-    normal = surface_point.normal.normalize()
+    denominator = direction.dot(plane_normal)
+    if abs(denominator) < 1e-9:
+        return None
 
-    light_direction = (light.position - point).normalize()
-    view_direction = (observer_position - point).normalize()
-    incident_direction = (point - light.position).normalize()
-    reflection_direction = reflect(incident_direction, normal)
+    t = (plane.point - ray_origin).dot(plane_normal) / denominator
+    if t <= 1e-9:
+        return None
 
-    # The surface is treated as one-sided: no contribution is visible
-    # when either the light or the observer is on the back side.
-    if normal.dot(light_direction) <= 0.0 or normal.dot(view_direction) <= 0.0:
-        return Vec3(0.0, 0.0, 0.0)
-
-    diffuse_factor = clamp_nonnegative(normal.dot(light_direction))
-    diffuse = light.intensity.component_mul(material.diffuse_color) * (
-        material.kd * diffuse_factor
-    )
-
-    specular_factor = clamp_nonnegative(reflection_direction.dot(view_direction))
-    specular = light.intensity.component_mul(material.specular_color) * (
-        material.ks * (specular_factor ** material.shininess)
-    )
-
-    return diffuse + specular
+    return ray_origin + direction * t
 
 
-def estimate_specular_brightness(scene: SceneInput) -> BrightnessResult:
-    """
-    Prepare intermediate values and compute brightness for the first observer.
-    """
-    if not scene.observer_positions:
-        raise ValueError("Scene must contain at least one observer position.")
+def compute_two_stage_brightness(scene: SceneInput, observer_position: Vec3) -> tuple[Vec3, TwoStageLightingState]:
+    # 1) Build incident ray from source to mirror reflection point PT.
+    pt = scene.mirror.reflection_point
+    incident = (pt - scene.light.position).normalize()
 
-    point = scene.surface_point.position
-    normal = scene.surface_point.normal
-    observer_position = scene.observer_positions[0]
+    # 2) Reflect from mirror at PT.
+    reflected = reflect_from_mirror(incident, scene.mirror.normal)
 
-    light_direction = (scene.light.position - point).normalize()
-    view_direction = (observer_position - point).normalize()
-    incident_direction = (point - scene.light.position).normalize()
-    reflection_direction = reflect(incident_direction, normal)
+    # Mirror scales incoming RGB intensity.
+    mirrored_intensity = scene.light.intensity * scene.mirror.ks
 
-    alignment = clamp_nonnegative(reflection_direction.dot(view_direction))
-    brightness = compute_brightness(
-        surface_point=scene.surface_point,
-        material=scene.material,
-        light=scene.light,
-        observer_position=observer_position,
-    )
+    # 3) Intersect reflected ray with diffuse plane.
+    hit_point = intersect_ray_with_plane(pt, reflected, scene.diffuse)
+    if hit_point is None:
+        return Vec3(0.0, 0.0, 0.0), TwoStageLightingState(incident, reflected, None)
 
-    return BrightnessResult(
-        light_direction=light_direction,
-        view_direction=view_direction,
-        reflection_direction=reflection_direction,
-        alignment=alignment,
-        estimated_brightness=brightness,
-        note=(
-            "Brightness is computed with the local model "
-            "for the first observer from observer_positions."
-        ),
-    )
+    # 4) Compute Lambert brightness toward observer from diffuse hit point.
+    view_dir = (observer_position - hit_point).normalize()
+    diffuse_cos = clamp_nonnegative(scene.diffuse.normal.normalize().dot(view_dir))
+
+    brightness = mirrored_intensity.component_mul(scene.diffuse.color) * (scene.diffuse.kd * diffuse_cos)
+    return brightness, TwoStageLightingState(incident, reflected, hit_point)
