@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from scene import DiffuseSurface, MirrorSurface, SceneInput
+from scene import SceneInput
 from vector import Vec3, clamp_nonnegative
 
 EPS = 1e-9
@@ -13,9 +13,10 @@ EPS = 1e-9
 class SampleLightingResult:
     sample_id: str
     mirror_point: Vec3
-    incident_to_mirror: Vec3
-    reflected_from_mirror: Vec3
+    view_incident_to_mirror: Vec3
+    reflected_view_ray: Vec3
     diffuse_hit_point: Vec3 | None
+    light_direction_to_source: Vec3 | None
     brightness: Vec3
 
 
@@ -35,7 +36,6 @@ def reflect_from_mirror(incident: Vec3, normal: Vec3) -> Vec3:
 
 
 def is_point_inside_triangle(point: Vec3, a: Vec3, b: Vec3, c: Vec3) -> bool:
-    """Check point inclusion in triangle by barycentric coordinates."""
     v0 = b - a
     v1 = c - a
     v2 = point - a
@@ -69,7 +69,6 @@ def intersect_ray_with_surface_triangle(
     p3: Vec3,
     normal: Vec3,
 ) -> Vec3 | None:
-    """Intersect ray with surface plane and keep only hits inside the triangle."""
     direction = ray_direction.normalize()
     unit_normal = normal.normalize()
 
@@ -89,7 +88,6 @@ def intersect_ray_with_surface_triangle(
 
 
 def random_point_on_triangle(a: Vec3, b: Vec3, c: Vec3, rng: random.Random) -> Vec3:
-    """Generate uniformly distributed random point inside triangle."""
     r1 = rng.random()
     r2 = rng.random()
 
@@ -100,22 +98,22 @@ def random_point_on_triangle(a: Vec3, b: Vec3, c: Vec3, rng: random.Random) -> V
     return a + (b - a) * r1 + (c - a) * r2
 
 
-def compute_sample_brightness(
+def compute_reflected_view_brightness(
     scene: SceneInput,
     observer_position: Vec3,
     mirror_point: Vec3,
     sample_id: str,
 ) -> SampleLightingResult:
-    # 1) Build incident ray from source to random mirror point PT.
-    incident = (mirror_point - scene.light.position).normalize()
+    # 1) Observer view ray arrives to mirror point.
+    view_incident = (mirror_point - observer_position).normalize()
 
-    # 2) Reflect from mirror using mirror normal computed from triangle points.
-    reflected = reflect_from_mirror(incident, scene.mirror.normal)
+    # 2) Mirror reflects observer view direction.
+    reflected_view = reflect_from_mirror(view_incident, scene.mirror.normal)
 
-    # 3) Intersect reflected ray with finite diffuse triangle.
+    # 3) Reflected view ray intersects finite diffuse triangle.
     hit_point = intersect_ray_with_surface_triangle(
         ray_origin=mirror_point,
-        ray_direction=reflected,
+        ray_direction=reflected_view,
         p1=scene.diffuse.p1,
         p2=scene.diffuse.p2,
         p3=scene.diffuse.p3,
@@ -126,25 +124,27 @@ def compute_sample_brightness(
         return SampleLightingResult(
             sample_id=sample_id,
             mirror_point=mirror_point,
-            incident_to_mirror=incident,
-            reflected_from_mirror=reflected,
+            view_incident_to_mirror=view_incident,
+            reflected_view_ray=reflected_view,
             diffuse_hit_point=None,
+            light_direction_to_source=None,
             brightness=Vec3(0.0, 0.0, 0.0),
         )
 
-    # 4) Compute Lambert brightness toward observer from diffuse hit point.
-    mirrored_intensity = scene.light.intensity * scene.mirror.ks
-    view_direction = (observer_position - hit_point).normalize()
-    lambert_factor = clamp_nonnegative(scene.diffuse.normal.dot(view_direction))
-    brightness = mirrored_intensity.component_mul(scene.diffuse.color) * (scene.diffuse.kd * lambert_factor)
+    # 4) Diffuse point is lit directly by source (Lambert), then scaled by mirror ks.
+    light_direction = (scene.light.position - hit_point).normalize()
+    lambert = clamp_nonnegative(scene.diffuse.normal.dot(light_direction))
+    diffuse = scene.light.intensity.component_mul(scene.diffuse.color) * (scene.diffuse.kd * lambert)
+    visible = diffuse * scene.mirror.ks
 
     return SampleLightingResult(
         sample_id=sample_id,
         mirror_point=mirror_point,
-        incident_to_mirror=incident,
-        reflected_from_mirror=reflected,
+        view_incident_to_mirror=view_incident,
+        reflected_view_ray=reflected_view,
         diffuse_hit_point=hit_point,
-        brightness=brightness,
+        light_direction_to_source=light_direction,
+        brightness=visible,
     )
 
 
@@ -159,13 +159,8 @@ def compute_observer_lighting(
     total = Vec3(0.0, 0.0, 0.0)
 
     for sample_index in range(1, samples_per_observer + 1):
-        mirror_point = random_point_on_triangle(
-            scene.mirror.p1,
-            scene.mirror.p2,
-            scene.mirror.p3,
-            rng,
-        )
-        sample = compute_sample_brightness(
+        mirror_point = random_point_on_triangle(scene.mirror.p1, scene.mirror.p2, scene.mirror.p3, rng)
+        sample = compute_reflected_view_brightness(
             scene=scene,
             observer_position=observer_position,
             mirror_point=mirror_point,
@@ -174,10 +169,9 @@ def compute_observer_lighting(
         sample_results.append(sample)
         total = total + sample.brightness
 
-    average = total / float(samples_per_observer)
     return ObserverLightingResult(
         observer_id=observer_id,
         observer_position=observer_position,
         samples=sample_results,
-        average_brightness=average,
+        average_brightness=total / float(samples_per_observer),
     )

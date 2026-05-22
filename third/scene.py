@@ -63,16 +63,16 @@ def create_default_scene() -> SceneInput:
 
     return SceneInput(
         light=LightSource(
-            position=Vec3(2.0, 0.0, 2.0),
+            position=Vec3(0.0, 0.0, 1.0),
             intensity=Vec3(1.0, 0.9, 0.8),
         ),
         mirror=mirror,
         diffuse=diffuse,
         observer_positions=[
-            Vec3(-3.0, 0.0, 1.0),
-            Vec3(-1.5, 2.0, 1.0),
-            Vec3(0.0, 3.0, 1.0),
-            Vec3(1.5, 2.0, 1.0),
-            Vec3(3.0, 0.0, 1.0),
+            Vec3(-0.8, -0.4, 1.0),
+            Vec3(-0.4, 0.2, 1.0),
+            Vec3(0.0, 0.6, 1.0),
+            Vec3(0.4, 0.2, 1.0),
+            Vec3(0.8, -0.4, 1.0),
         ],
     )

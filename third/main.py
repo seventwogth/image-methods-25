@@ -30,30 +30,31 @@ def save_csv(path: Path, headers: list[str], rows: list[list[str]]) -> None:
 
 
 def print_report(scene: SceneInput, results: list[ObserverLightingResult]) -> None:
-    """
-    Keep report style close to the previous concise lab output format:
-    - one compact input block;
-    - one compact results block with one value per observer.
-    Detailed per-sample values remain available in CSV.
-    """
     print("Входные данные:")
     print(f"- I01(RGB) = {format_vec3(scene.light.intensity)}")
-    print(f"- O1 = {format_vec3(scene.light.position - scene.mirror.p1)}")
     print(f"- PL = {format_vec3(scene.light.position)}")
-    print(f"- PT = {format_vec3(scene.mirror.p1)}")
-    print(f"- N_mirror = {format_vec3(scene.mirror.normal)}")
+    print("- Mirror:")
+    print(f"  A = {format_vec3(scene.mirror.p1)}")
+    print(f"  B = {format_vec3(scene.mirror.p2)}")
+    print(f"  C = {format_vec3(scene.mirror.p3)}")
+    print(f"  N_mirror = {format_vec3(scene.mirror.normal)}")
+    print(f"  ks = {format_number(scene.mirror.ks)}")
+    print("- Diffuse:")
+    print(f"  A = {format_vec3(scene.diffuse.p1)}")
+    print(f"  B = {format_vec3(scene.diffuse.p2)}")
+    print(f"  C = {format_vec3(scene.diffuse.p3)}")
+    print(f"  N_diffuse = {format_vec3(scene.diffuse.normal)}")
+    print(f"  K(RGB) = {format_vec3(scene.diffuse.color)}")
+    print(f"  kd = {format_number(scene.diffuse.kd)}")
     print(f"- samples_per_observer = {SAMPLES_PER_OBSERVER}")
     print(f"- random_seed = {RANDOM_SEED}")
     for idx, observer in enumerate(scene.observer_positions, start=1):
         print(f"- P{idx:02d} = {format_vec3(observer)}")
-    print(f"- K(RGB) = {format_vec3(scene.diffuse.color)}")
-    print(f"- kd = {format_number(scene.diffuse.kd)}")
-    print(f"- ks = {format_number(scene.mirror.ks)}")
 
     print("\nРезультаты:")
     for observer_result in results:
         print(
-            f"- {observer_result.observer_id} L(RGB, PT, {observer_result.observer_id}) = "
+            f"- {observer_result.observer_id} L(RGB, mirror, {observer_result.observer_id}) = "
             f"{format_vec3(observer_result.average_brightness)}"
         )
 
@@ -69,9 +70,12 @@ def build_csv_rows(results: list[ObserverLightingResult]) -> list[list[str]]:
                     sample.sample_id,
                     format_vec3(observer_result.observer_position),
                     format_vec3(sample.mirror_point),
-                    format_vec3(sample.incident_to_mirror),
-                    format_vec3(sample.reflected_from_mirror),
+                    format_vec3(sample.view_incident_to_mirror),
+                    format_vec3(sample.reflected_view_ray),
                     format_vec3(sample.diffuse_hit_point) if sample.diffuse_hit_point else "NONE",
+                    format_vec3(sample.light_direction_to_source)
+                    if sample.light_direction_to_source
+                    else "NONE",
                     format_number(sample.brightness.x),
                     format_number(sample.brightness.y),
                     format_number(sample.brightness.z),
@@ -107,9 +111,10 @@ def main() -> None:
         "sample_id",
         "observer_position",
         "mirror_point",
-        "incident_to_mirror",
-        "reflected_from_mirror",
+        "view_incident_to_mirror",
+        "reflected_view_ray",
         "diffuse_hit_point",
+        "light_direction_to_source",
         "L_R",
         "L_G",
         "L_B",
