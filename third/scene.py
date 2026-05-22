@@ -2,69 +2,77 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from vector import Vec3
+from vector import Vec3, cross
 
 
 @dataclass(frozen=True)
 class LightSource:
     position: Vec3
-    intensity: Vec3  # RGB intensity
+    intensity: Vec3  # I01(RGB)
 
 
 @dataclass(frozen=True)
-class SurfacePoint:
-    position: Vec3
-    normal: Vec3
-
-
-@dataclass(frozen=True)
-class Material:
-    diffuse_color: Vec3
-    specular_color: Vec3
-    kd: float
+class MirrorSurface:
+    p1: Vec3
+    p2: Vec3
+    p3: Vec3
     ks: float
-    shininess: float
+
+    @property
+    def normal(self) -> Vec3:
+        return cross(self.p2 - self.p1, self.p3 - self.p1).normalize()
+
+
+@dataclass(frozen=True)
+class DiffuseSurface:
+    p1: Vec3
+    p2: Vec3
+    p3: Vec3
+    color: Vec3  # K(RGB)
+    kd: float
+
+    @property
+    def normal(self) -> Vec3:
+        return cross(self.p2 - self.p1, self.p3 - self.p1).normalize()
 
 
 @dataclass(frozen=True)
 class SceneInput:
     light: LightSource
-    surface_point: SurfacePoint
-    material: Material
+    mirror: MirrorSurface
+    diffuse: DiffuseSurface
     observer_positions: list[Vec3]
 
 
 def create_default_scene() -> SceneInput:
-    """
-    Return a simple scene for the first part of lab work 3.
+    mirror = MirrorSurface(
+        p1=Vec3(-2.0, -1.5, 0.0),
+        p2=Vec3(2.0, -1.5, 0.0),
+        p3=Vec3(0.0, 1.5, 0.0),
+        ks=1.0,
+    )
 
-    The values are intentionally small and easy to explain:
-    - the surface point is at the origin;
-    - the normal is directed upward along the Z axis;
-    - the light source is placed to the side and above the point;
-    - five observers are placed around the point.
-    """
+    # p2/p3 order chosen so normal points down (negative Z).
+    diffuse = DiffuseSurface(
+        p1=Vec3(-2.5, -1.5, 2.0),
+        p2=Vec3(0.0, 2.0, 2.0),
+        p3=Vec3(2.5, -1.5, 2.0),
+        color=Vec3(0.7, 0.7, 0.7),
+        kd=1.0,
+    )
+
     return SceneInput(
         light=LightSource(
-            position=Vec3(2.0, 2.0, 3.0),
+            position=Vec3(0.0, 0.0, 1.0),
             intensity=Vec3(1.0, 0.9, 0.8),
         ),
-        surface_point=SurfacePoint(
-            position=Vec3(0.0, 0.0, 0.0),
-            normal=Vec3(0.0, 0.0, 1.0),
-        ),
-        material=Material(
-            diffuse_color=Vec3(0.7, 0.7, 0.7),
-            specular_color=Vec3(1.0, 1.0, 1.0),
-            kd=0.6,
-            ks=0.8,
-            shininess=16.0,
-        ),
+        mirror=mirror,
+        diffuse=diffuse,
         observer_positions=[
-            Vec3(-3.0, 0.0, 2.0),
-            Vec3(-1.5, 2.0, 2.5),
-            Vec3(0.0, 3.0, 3.0),
-            Vec3(1.5, 2.0, 2.5),
-            Vec3(3.0, 0.0, 2.0),
+            Vec3(-0.8, -0.4, 1.0),
+            Vec3(-0.4, 0.2, 1.0),
+            Vec3(0.0, 0.6, 1.0),
+            Vec3(0.4, 0.2, 1.0),
+            Vec3(0.8, -0.4, 1.0),
         ],
     )
